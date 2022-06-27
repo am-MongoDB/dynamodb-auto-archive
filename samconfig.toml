@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "dynamodb-autoarchive"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1frp6gm8t57ub"
+s3_prefix = "dynamodb-autoarchive"
+region = "eu-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

@@ -109,6 +109,9 @@ Resources:
         WriteCapacityUnits: 5
       StreamSpecification:
         StreamViewType: "NEW_AND_OLD_IMAGES"
+      TimeToLiveSpecification:
+        AttributeName: ArchiveTime
+        Enabled: true
 
 Outputs:
   APIEndpoint:

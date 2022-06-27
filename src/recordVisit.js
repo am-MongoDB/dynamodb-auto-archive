@@ -2,19 +2,24 @@ const getClient = require("./client").getClient;
 
 exports.handler = async (event, context) => {
   const tag = event.pathParameters.tag;
+  // const SECONDS_IN_AN_HOUR = 60 * 60;
+  const secondsSinceEpoch = Math.round(Date.now() / 1000);
+  const expirationTime = secondsSinceEpoch + 30;
 
   await getClient().updateItem({
     TableName: process.env.TABLE_NAME,
     Key: {
       'ID': { 'S': tag }
     },
-    UpdateExpression: "SET #count = if_not_exists(#count, :zero) + :inc",
+    UpdateExpression: "SET #count = if_not_exists(#count, :zero) + :inc, #ttl = :ttl",
     ExpressionAttributeNames: {
-      "#count": "Count"
+      "#count": "Count",
+      "#ttl": "ArchiveTime"
     },
     ExpressionAttributeValues: {
       ":inc": { "N": "1" },
-      ":zero": { "N": "0" }
+      ":zero": { "N": "0" },
+      ":ttl": { "N": `${expirationTime}`}
     }
   }).promise()
   return {
