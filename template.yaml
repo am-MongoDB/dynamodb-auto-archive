@@ -87,6 +87,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref DynamoDBTable
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+          FIREHOSE_NAME: !Ref Firehose
       Policies:
       - Statement:
         - Sid: DDBUpdateItemPolicy
@@ -94,6 +95,12 @@ Resources:
           Action:
           - dynamodb:UpdateItem
           Resource: !GetAtt 'DynamoDBTable.Arn'
+        - Sid: KFHPutItemPolicy
+          Effect: Allow
+          Action:
+          - firehose:PutRecord
+          - firehose:PutRecordBatch
+          Resource: !GetAtt 'Firehose.Arn'
 
   DynamoDBTable:
     Type: "AWS::DynamoDB::Table"
@@ -113,6 +120,116 @@ Resources:
         AttributeName: ArchiveTime
         Enabled: true
 
+  # KinesisStream:
+  #   Type: AWS::Kinesis::Stream
+  #   Properties:
+  #     ShardCount: 1
+
+  FirehoseDestinationBucket:
+    Type: AWS::S3::Bucket
+
+  Firehose:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    DependsOn:
+      - DeliveryStreamPolicy
+    Properties:
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt FirehoseDestinationBucket.Arn
+        RoleARN: !GetAtt DeliveryStreamRole.Arn
+
+  DeliveryStreamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+
+  DeliveryStreamPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles:
+        - !Ref DeliveryStreamRole
+      PolicyName: firehose_delivery_policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !GetAtt FirehoseDestinationBucket.Arn
+              - !Join 
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref FirehoseDestinationBucket
+                  - '*'
+
+  # DeliveryStreamRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - firehose.amazonaws.com
+  #           Action:
+  #           - sts:AssumeRole
+  #           Condition:
+  #             StringEquals:
+  #               sts:ExternalId: !Sub ${AWS::AccountId}
+  #     Policies:
+  #       - PolicyName: fh-policy
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - s3:AbortMultipartUpload
+  #                 - s3:GetBucketLocation
+  #                 - s3:GetObject
+  #                 - s3:ListBucket
+  #                 - s3:ListBucketMultipartUploads
+  #                 - s3:PutObject
+  #               Resource: !If
+  #                 - CreateS3Bucket
+  #                 - - !GetAtt FirehoseDestinationBucket.Arn
+  #                   - !Sub ${FirehoseDestinationBucket.Arn}/*
+  #                 - - ExistingS3BucketArn
+  #                   - !Sub ${ExistingS3BucketArn}/*
+
+  # FirehoseRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AssumeRole1
+  #           Effect: Allow
+  #           Principal:
+  #             Service: firehose.amazonaws.com
+  #           Action: 'sts:AssumeRole'
+  #         - Sid: S3Role
+  #           Effect: Allow
+  #           Principal:
+  #             Service: s3.amazonaws.com
+  #           Action:
+  #           - 's3:PutObject'
+  #           # Resource: !Ref FirehoseDestinationBucket
+
 Outputs:
   APIEndpoint:
     Description: "API Gateway endpoint URL for Prod stage"
@@ -120,4 +237,9 @@ Outputs:
   TableName:
     Description: "Name of the DynamoDB table"
     Value: !Ref DynamoDBTable
-
+  FirehoseName:
+    Description: "Name of the Kinesis Firehose deliverystream"
+    Value: !Ref Firehose
+  S3Name:
+    Description: "Name of the S3 bucket"
+    Value: !Ref FirehoseDestinationBucket
